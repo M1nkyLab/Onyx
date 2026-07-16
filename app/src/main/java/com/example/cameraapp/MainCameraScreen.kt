@@ -52,16 +52,9 @@ fun MainCameraScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Close",
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
-            )
-
             // Recording Timer Pill
             if (isRecording) {
                 Box(
@@ -78,22 +71,7 @@ fun MainCameraScreen(
                     )
                 }
             } else {
-                Spacer(modifier = Modifier.width(60.dp)) // Placeholder to keep alignment
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = "Flash",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
+                Spacer(modifier = Modifier.height(28.dp)) // Placeholder to keep vertical alignment
             }
         }
 
@@ -197,21 +175,8 @@ fun MainCameraScreen(
                 }
             }
 
-            // Flip Camera / Retake
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Face,
-                    contentDescription = "Flip Camera",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Refresh",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
+            // Invisible spacer to balance the gallery thumbnail and keep record button centered
+            Spacer(modifier = Modifier.size(48.dp))
         }
     }
 }

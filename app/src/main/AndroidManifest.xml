@@ -29,6 +29,7 @@
         android:allowBackup="true"
         android:label="CameraApp"
         android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar"
         android:requestLegacyExternalStorage="true"
         tools:targetApi="31">
         <activity
