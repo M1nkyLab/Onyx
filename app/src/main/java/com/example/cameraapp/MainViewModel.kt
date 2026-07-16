@@ -1,20 +1,27 @@
 package com.example.cameraapp
 
+import android.content.Context
+import android.media.MediaScannerConnection
 import android.os.Environment
 import android.util.Size
 import android.view.Surface
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val renderer: DualVideoRenderer,
     private val encoderEngine: MediaEncoderEngine
 ) : ViewModel() {
 
     private var cameraResolution: Size? = null
+    
+    private var lastSavedFile16x9: String? = null
+    private var lastSavedFile9x16: String? = null
 
     fun onPreviewSurface16x9Created(surface: Surface) {
         renderer.setPreviewSurface16x9(surface)
@@ -37,11 +44,14 @@ class MainViewModel @Inject constructor(
     }
 
     private fun startRecording() {
-        // Save the files directly into the Movies directory
-        val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+        // Save the files directly into the Movies directory (often monitored by gallery/photos)
+        val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
         val timestamp = System.currentTimeMillis()
         val out16x9 = File(moviesDir, "DualCam_16x9_$timestamp.mp4").absolutePath
         val out9x16 = File(moviesDir, "DualCam_9x16_$timestamp.mp4").absolutePath
+        
+        lastSavedFile16x9 = out16x9
+        lastSavedFile9x16 = out9x16
 
         // Use the highest available camera resolution, falling back to 1080p if unresolved.
         var width = cameraResolution?.width ?: 1920
@@ -70,5 +80,13 @@ class MainViewModel @Inject constructor(
 
     private fun stopRecording() {
         encoderEngine.stopRecording()
+        
+        // Scan files so they immediately appear in the Photos app
+        val filesToScan = listOfNotNull(lastSavedFile16x9, lastSavedFile9x16).toTypedArray()
+        if (filesToScan.isNotEmpty()) {
+            MediaScannerConnection.scanFile(context, filesToScan, arrayOf("video/mp4")) { path, uri ->
+                // Media scanned
+            }
+        }
     }
 }

@@ -27,6 +27,17 @@ fun MainCameraScreen(
     onSurfaceCreated9x16: (android.view.Surface) -> Unit
 ) {
     var isRecording by remember { mutableStateOf(false) }
+    var recordingSeconds by remember { mutableStateOf(0) }
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingSeconds = 0
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                recordingSeconds++
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -58,20 +69,21 @@ fun MainCameraScreen(
                         .background(Color(0xFFE53935), RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
+                    val timeString = String.format("%02d:%02d", recordingSeconds / 60, recordingSeconds % 60)
                     Text(
-                        text = "REC", 
+                        text = timeString, 
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             } else {
-                Spacer(modifier = Modifier.width(80.dp)) // Placeholder to keep alignment
+                Spacer(modifier = Modifier.width(60.dp)) // Placeholder to keep alignment
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Icon(
-                    imageVector = Icons.Default.FlashOn,
+                    imageVector = Icons.Default.Star,
                     contentDescription = "Flash",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -85,18 +97,23 @@ fun MainCameraScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
         // --- DUAL PREVIEWS ---
         // 9:16 Portrait Preview
         Box(
             modifier = Modifier
-                .width(200.dp) // Scaled down for UI fit
-                .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.DarkGray)
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            CameraPreviewNode(onSurfaceCreated9x16)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(9f / 16f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.DarkGray)
+            ) {
+                CameraPreviewNode(onSurfaceCreated9x16)
+            }
         }
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -104,15 +121,22 @@ fun MainCameraScreen(
         // 16:9 Landscape Preview
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.DarkGray)
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            CameraPreviewNode(onSurfaceCreated16x9)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.DarkGray)
+            ) {
+                CameraPreviewNode(onSurfaceCreated16x9)
+            }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // --- BOTTOM CONTROLS ---
         // Format & Zoom indicators
@@ -176,7 +200,7 @@ fun MainCameraScreen(
             // Flip Camera / Retake
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Icon(
-                    imageVector = Icons.Default.FlipCameraAndroid,
+                    imageVector = Icons.Default.Face,
                     contentDescription = "Flip Camera",
                     tint = Color.White,
                     modifier = Modifier.size(32.dp)
