@@ -3,6 +3,7 @@ package com.example.cameraapp
 import android.content.Context
 import android.view.Surface
 import android.util.Size
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -35,7 +36,7 @@ class CameraManager @Inject constructor(
         cameraProvider.unbindAll()
 
         val resolutionSelector = ResolutionSelector.Builder()
-            .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+            .setAspectRatioStrategy(androidx.camera.core.resolutionselector.AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
             .build()
 
         val preview = Preview.Builder()
