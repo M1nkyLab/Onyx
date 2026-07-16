@@ -253,8 +253,9 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         Matrix.setIdentityM(mvpMatrix, 0)
         
         if (isCropped) {
-            // Apply Orthogonal texture projection to crop 16:9 to 9:16 center-aligned
-            val scaleX = (9f / 16f) / (16f / 9f) 
+            // CORRECT MATH: Stretch the X axis to counteract the 9:16 surface squish.
+            // This pushes the left and right edges off-screen, creating a center crop.
+            val scaleX = (16f / 9f) / (9f / 16f) 
             Matrix.scaleM(mvpMatrix, 0, scaleX, 1.0f, 1.0f)
         }
 

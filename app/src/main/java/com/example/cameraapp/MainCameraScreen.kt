@@ -107,7 +107,7 @@ fun MainCameraScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxHeight()
+                    .fillMaxWidth(0.55f)
                     .aspectRatio(9f / 16f)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.DarkGray)
