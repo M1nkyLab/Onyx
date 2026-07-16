@@ -2,8 +2,11 @@ package com.example.cameraapp
 
 import android.content.Context
 import android.view.Surface
+import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -23,16 +26,26 @@ class CameraManager @Inject constructor(
 ) {
     private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
     
+    var onResolutionResolved: ((Size) -> Unit)? = null
+
     suspend fun startCamera(lifecycleOwner: LifecycleOwner) {
         val cameraProvider = ProcessCameraProvider.getInstance(context).await()
         
         // Unbind any previous use cases before rebinding
         cameraProvider.unbindAll()
 
-        val preview = Preview.Builder().build()
+        val resolutionSelector = ResolutionSelector.Builder()
+            .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+            .build()
+
+        val preview = Preview.Builder()
+            .setResolutionSelector(resolutionSelector)
+            .build()
             
         // Provide our custom SurfaceProvider
         preview.setSurfaceProvider { request ->
+            onResolutionResolved?.invoke(request.resolution)
+            
             dualVideoRenderer.onSurfaceTextureCreated = { surfaceTexture ->
                 // CameraX requires the SurfaceTexture to have a default buffer size matching the request resolution
                 surfaceTexture.setDefaultBufferSize(request.resolution.width, request.resolution.height)

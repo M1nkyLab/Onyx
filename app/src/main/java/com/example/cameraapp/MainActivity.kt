@@ -72,6 +72,9 @@ class MainActivity : ComponentActivity() {
 
     private fun startCameraBinding() {
         // Binds the CameraX preview to the activity lifecycle
+        cameraManager.onResolutionResolved = { size ->
+            viewModel.onResolutionResolved(size)
+        }
         lifecycleScope.launch {
             cameraManager.startCamera(this@MainActivity)
         }

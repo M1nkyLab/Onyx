@@ -4,6 +4,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.media.MediaRecorder
@@ -52,26 +53,58 @@ class MediaEncoderEngine @Inject constructor() {
 
     private val bufferInfo = MediaCodec.BufferInfo()
 
-    fun prepare(outputPath16x9: String, outputPath9x16: String) {
-        // Prepare 16:9 Video Codec (HEVC 4K, 60fps, 80 Mbps)
-        val format16x9 = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, 3840, 2160).apply {
+    private fun selectVideoMimeType(width: Int, height: Int): String {
+        val codecList = MediaCodecList(MediaCodecList.ALL_CODECS)
+        for (info in codecList.codecInfos) {
+            if (info.isEncoder && info.supportedTypes.contains(MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+                val caps = info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_HEVC)
+                val videoCaps = caps.videoCapabilities
+                if (videoCaps != null && videoCaps.isSizeSupported(width, height)) {
+                    return MediaFormat.MIMETYPE_VIDEO_HEVC
+                }
+            }
+        }
+        return MediaFormat.MIMETYPE_VIDEO_AVC
+    }
+
+    fun prepare(outputPath16x9: String, outputPath9x16: String, sourceWidth: Int, sourceHeight: Int, targetFps: Int) {
+        val mimeType = selectVideoMimeType(sourceWidth, sourceHeight)
+
+        // Calculate dynamic bitrates based on resolution and fps (0.25 bits/pixel/frame)
+        val bitrate16x9 = (sourceWidth * sourceHeight * targetFps * 0.25).toInt()
+
+        // 16:9 format
+        val format16x9 = MediaFormat.createVideoFormat(mimeType, sourceWidth, sourceHeight).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, 80_000_000)
-            setInteger(MediaFormat.KEY_FRAME_RATE, 60)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate16x9)
+            setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
-        videoCodec16x9 = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC)
+        
+        videoCodec16x9 = MediaCodec.createEncoderByType(mimeType)
         videoCodec16x9?.configure(format16x9, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         inputSurface16x9 = videoCodec16x9?.createInputSurface()
 
-        // Prepare 9:16 Video Codec (HEVC cropped 4K -> 2160x3840, 60fps, 60 Mbps)
-        val format9x16 = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, 2160, 3840).apply {
+        // 9:16 format (portrait mathematical crop)
+        val isLandscape = sourceWidth > sourceHeight
+        val landscapeWidth = if (isLandscape) sourceWidth else sourceHeight
+        val landscapeHeight = if (isLandscape) sourceHeight else sourceWidth
+
+        var portraitWidth = (landscapeHeight * 9) / 16
+        portraitWidth = if (portraitWidth % 2 != 0) portraitWidth - 1 else portraitWidth
+        var portraitHeight = landscapeHeight
+        portraitHeight = if (portraitHeight % 2 != 0) portraitHeight - 1 else portraitHeight
+
+        val bitrate9x16 = (portraitWidth * portraitHeight * targetFps * 0.25).toInt()
+
+        val format9x16 = MediaFormat.createVideoFormat(mimeType, portraitWidth, portraitHeight).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, 60_000_000)
-            setInteger(MediaFormat.KEY_FRAME_RATE, 60)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate9x16)
+            setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
-        videoCodec9x16 = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC)
+        
+        videoCodec9x16 = MediaCodec.createEncoderByType(mimeType)
         videoCodec9x16?.configure(format9x16, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         inputSurface9x16 = videoCodec9x16?.createInputSurface()
 
