@@ -213,6 +213,14 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
 
     private fun renderToSurface(surface: EGLSurface, timestamp: Long, isCropped: Boolean) {
         EGL14.eglMakeCurrent(eglDisplay, surface, surface, eglContext)
+        
+        // Query surface dimensions and set OpenGL viewport (Critical for fixing 1x1 dummy surface bug)
+        val widthArray = IntArray(1)
+        val heightArray = IntArray(1)
+        EGL14.eglQuerySurface(eglDisplay, surface, EGL14.EGL_WIDTH, widthArray, 0)
+        EGL14.eglQuerySurface(eglDisplay, surface, EGL14.EGL_HEIGHT, heightArray, 0)
+        GLES20.glViewport(0, 0, widthArray[0], heightArray[0])
+
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
@@ -232,6 +240,11 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         val texCoordHandle = GLES20.glGetAttribLocation(programId, "aTextureCoord")
         val mvpMatrixHandle = GLES20.glGetUniformLocation(programId, "uMVPMatrix")
         val stMatrixHandle = GLES20.glGetUniformLocation(programId, "uSTMatrix")
+        val sTextureHandle = GLES20.glGetUniformLocation(programId, "sTexture")
+
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, externalTextureId)
+        GLES20.glUniform1i(sTextureHandle, 0)
 
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
         GLES20.glUniformMatrix4fv(stMatrixHandle, 1, false, stMatrix, 0)
