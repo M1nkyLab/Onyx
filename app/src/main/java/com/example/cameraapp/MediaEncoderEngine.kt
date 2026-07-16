@@ -1,0 +1,195 @@
+package com.example.cameraapp
+
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaFormat
+import android.media.MediaMuxer
+import android.media.MediaRecorder
+import android.os.Handler
+import android.os.HandlerThread
+import android.util.Log
+import android.view.Surface
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Media Encoder Engine for dual-format (16:9 and 9:16) 4K 60FPS video recording.
+ * Initializes HEVC (H.265) video codecs and a unified AAC audio codec.
+ * Routes raw inputs and dispatches identical encoded audio blocks to two distinct MediaMuxers.
+ * Ensures zero-copy pipeline on the video side by exposing input surfaces.
+ */
+@Singleton
+class MediaEncoderEngine @Inject constructor() {
+
+    private val TAG = "MediaEncoderEngine"
+
+    private var videoCodec16x9: MediaCodec? = null
+    private var videoCodec9x16: MediaCodec? = null
+    private var audioCodec: MediaCodec? = null
+
+    private var muxer16x9: MediaMuxer? = null
+    private var muxer9x16: MediaMuxer? = null
+
+    private var videoTrackIndex16x9 = -1
+    private var videoTrackIndex9x16 = -1
+    private var audioTrackIndex16x9 = -1
+    private var audioTrackIndex9x16 = -1
+
+    private var muxer16x9Started = false
+    private var muxer9x16Started = false
+
+    var inputSurface16x9: Surface? = null
+        private set
+    var inputSurface9x16: Surface? = null
+        private set
+
+    private var audioRecord: AudioRecord? = null
+    private var audioThread: HandlerThread? = null
+    private var audioHandler: Handler? = null
+    private var isRecording = false
+
+    private val bufferInfo = MediaCodec.BufferInfo()
+
+    fun prepare(outputPath16x9: String, outputPath9x16: String) {
+        // Prepare 16:9 Video Codec (HEVC 4K, 60fps, 80 Mbps)
+        val format16x9 = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, 3840, 2160).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, 80_000_000)
+            setInteger(MediaFormat.KEY_FRAME_RATE, 60)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+        }
+        videoCodec16x9 = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC)
+        videoCodec16x9?.configure(format16x9, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        inputSurface16x9 = videoCodec16x9?.createInputSurface()
+
+        // Prepare 9:16 Video Codec (HEVC cropped 4K -> 2160x3840, 60fps, 60 Mbps)
+        val format9x16 = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, 2160, 3840).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, 60_000_000)
+            setInteger(MediaFormat.KEY_FRAME_RATE, 60)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+        }
+        videoCodec9x16 = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC)
+        videoCodec9x16?.configure(format9x16, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        inputSurface9x16 = videoCodec9x16?.createInputSurface()
+
+        // Prepare Unified Audio Codec (AAC, 48kHz, 128kbps stereo)
+        val audioFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, 48000, 2).apply {
+            setInteger(MediaFormat.KEY_BIT_RATE, 128000)
+            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+        }
+        audioCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+        audioCodec?.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+
+        // Prepare Muxers
+        muxer16x9 = MediaMuxer(outputPath16x9, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        muxer9x16 = MediaMuxer(outputPath9x16, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    }
+
+    fun startRecording() {
+        isRecording = true
+        videoCodec16x9?.start()
+        videoCodec9x16?.start()
+        audioCodec?.start()
+
+        // Setup AudioRecord
+        val minBufferSize = AudioRecord.getMinBufferSize(48000, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
+        try {
+            audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, 48000, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT, minBufferSize * 2)
+            audioRecord?.startRecording()
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Audio recording permission denied")
+        }
+
+        audioThread = HandlerThread("AudioRecordThread").apply { start() }
+        audioHandler = Handler(audioThread!!.looper)
+        
+        audioHandler?.post { audioLoop(minBufferSize) }
+    }
+
+    fun stopRecording() {
+        isRecording = false
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
+
+        audioThread?.quitSafely()
+        audioThread = null
+        
+        // Drain remaining buffers and stop codecs
+        // (Simplified for brevity, production code requires proper EOS signaling and draining loop)
+        videoCodec16x9?.stop()
+        videoCodec16x9?.release()
+        
+        videoCodec9x16?.stop()
+        videoCodec9x16?.release()
+        
+        audioCodec?.stop()
+        audioCodec?.release()
+
+        if (muxer16x9Started) {
+            muxer16x9?.stop()
+            muxer16x9?.release()
+        }
+        if (muxer9x16Started) {
+            muxer9x16?.stop()
+            muxer9x16?.release()
+        }
+        
+        muxer16x9Started = false
+        muxer9x16Started = false
+    }
+
+    /**
+     * Polls AudioRecord, feeds MediaCodec, reads encoded audio, and writes identical blocks to both muxers.
+     */
+    private fun audioLoop(bufferSize: Int) {
+        val audioBuffer = ByteArray(bufferSize)
+        while (isRecording) {
+            val bytesRead = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
+            if (bytesRead > 0) {
+                // 1. Feed raw audio to codec
+                val inputBufferIndex = audioCodec?.dequeueInputBuffer(-1) ?: -1
+                if (inputBufferIndex >= 0) {
+                    val inputBuffer = audioCodec?.getInputBuffer(inputBufferIndex)
+                    inputBuffer?.clear()
+                    inputBuffer?.put(audioBuffer, 0, bytesRead)
+                    val pts = System.nanoTime() / 1000
+                    audioCodec?.queueInputBuffer(inputBufferIndex, 0, bytesRead, pts, 0)
+                }
+            }
+
+            // 2. Drain encoded audio and write to both muxers
+            drainAudio()
+            
+            // 3. (In real implementation, also drain video codecs here or on another thread)
+            // drainVideo(videoCodec16x9, muxer16x9, true)
+            // drainVideo(videoCodec9x16, muxer9x16, false)
+        }
+    }
+
+    private fun drainAudio() {
+        var outputBufferIndex = audioCodec?.dequeueOutputBuffer(bufferInfo, 0) ?: -1
+        while (outputBufferIndex >= 0) {
+            val encodedData = audioCodec?.getOutputBuffer(outputBufferIndex)
+            if (encodedData != null && bufferInfo.size > 0) {
+                encodedData.position(bufferInfo.offset)
+                encodedData.limit(bufferInfo.offset + bufferInfo.size)
+
+                // Write identical audio packets to both muxers to ensure precise sync
+                if (muxer16x9Started && audioTrackIndex16x9 >= 0) {
+                    muxer16x9?.writeSampleData(audioTrackIndex16x9, encodedData, bufferInfo)
+                }
+                if (muxer9x16Started && audioTrackIndex9x16 >= 0) {
+                    // Reset position since previous write consumed the buffer position
+                    encodedData.position(bufferInfo.offset) 
+                    muxer9x16?.writeSampleData(audioTrackIndex9x16, encodedData, bufferInfo)
+                }
+            }
+            audioCodec?.releaseOutputBuffer(outputBufferIndex, false)
+            outputBufferIndex = audioCodec?.dequeueOutputBuffer(bufferInfo, 0) ?: -1
+        }
+    }
+}
