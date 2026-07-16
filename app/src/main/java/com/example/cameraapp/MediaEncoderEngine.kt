@@ -85,15 +85,13 @@ class MediaEncoderEngine @Inject constructor() {
         videoCodec16x9?.configure(format16x9, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         inputSurface16x9 = videoCodec16x9?.createInputSurface()
 
-        // 9:16 format (portrait mathematical crop)
+        // 9:16 format (portrait crop, swapped dimensions to match 1080x1920 style)
         val isLandscape = sourceWidth > sourceHeight
         val landscapeWidth = if (isLandscape) sourceWidth else sourceHeight
         val landscapeHeight = if (isLandscape) sourceHeight else sourceWidth
 
-        var portraitWidth = (landscapeHeight * 9) / 16
-        portraitWidth = if (portraitWidth % 2 != 0) portraitWidth - 1 else portraitWidth
-        var portraitHeight = landscapeHeight
-        portraitHeight = if (portraitHeight % 2 != 0) portraitHeight - 1 else portraitHeight
+        val portraitWidth = landscapeHeight
+        val portraitHeight = landscapeWidth
 
         val bitrate9x16 = (portraitWidth * portraitHeight * targetFps * 0.25).toInt()
 
@@ -187,10 +185,13 @@ class MediaEncoderEngine @Inject constructor() {
                 val inputBufferIndex = audioCodec?.dequeueInputBuffer(-1) ?: -1
                 if (inputBufferIndex >= 0) {
                     val inputBuffer = audioCodec?.getInputBuffer(inputBufferIndex)
-                    inputBuffer?.clear()
-                    inputBuffer?.put(audioBuffer, 0, bytesRead)
-                    val pts = System.nanoTime() / 1000
-                    audioCodec?.queueInputBuffer(inputBufferIndex, 0, bytesRead, pts, 0)
+                    if (inputBuffer != null) {
+                        inputBuffer.clear()
+                        val bytesToCopy = Math.min(bytesRead, inputBuffer.capacity())
+                        inputBuffer.put(audioBuffer, 0, bytesToCopy)
+                        val pts = System.nanoTime() / 1000
+                        audioCodec?.queueInputBuffer(inputBufferIndex, 0, bytesToCopy, pts, 0)
+                    }
                 }
             }
 
