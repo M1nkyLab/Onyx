@@ -49,8 +49,11 @@ fun MainCameraScreen(
         // Rule-of-Thirds Grid Indicator
         RuleOfThirdsGrid()
 
-        // 9:16 Aspect Ratio Boundary Overlay
+        // 9:16 Aspect Ratio Boundary Overlay (Portrait)
         NineSixteenBoundary()
+
+        // 16:9 Aspect Ratio Boundary Overlay (Landscape)
+        SixteenNineBoundary()
 
         // Recording Controls (Material 3)
         Box(
@@ -124,6 +127,36 @@ fun NineSixteenBoundary() {
         val startY = (height - boundaryHeight) / 2
         
         val color = Color.Yellow.copy(alpha = 0.5f)
+        val strokeWidth = 2.dp.toPx()
+
+        // Draw boundary rectangle
+        drawRect(
+            color = color,
+            topLeft = Offset(startX, startY),
+            size = androidx.compose.ui.geometry.Size(boundaryWidth, boundaryHeight),
+            style = Stroke(width = strokeWidth)
+        )
+    }
+}
+
+@Composable
+fun SixteenNineBoundary() {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val width = size.width
+        val height = size.height
+
+        // Calculate 16:9 bounds inside current screen
+        val targetRatio = 16f / 9f
+        val currentRatio = width / height
+        
+        val boundaryWidth = if (currentRatio > targetRatio) height * targetRatio else width
+        val boundaryHeight = if (currentRatio > targetRatio) height else width / targetRatio
+        
+        val startX = (width - boundaryWidth) / 2
+        val startY = (height - boundaryHeight) / 2
+        
+        // Use a different color (e.g., Cyan) for landscape to distinguish from the yellow portrait boundary
+        val color = Color.Cyan.copy(alpha = 0.5f)
         val strokeWidth = 2.dp.toPx()
 
         // Draw boundary rectangle
