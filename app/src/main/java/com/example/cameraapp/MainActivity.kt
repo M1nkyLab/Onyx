@@ -40,8 +40,11 @@ class MainActivity : ComponentActivity() {
                 onRecordToggle = { isRecording ->
                     viewModel.toggleRecording(isRecording)
                 },
-                onSurfaceCreated = { surface ->
-                    viewModel.onPreviewSurfaceCreated(surface)
+                onSurfaceCreated16x9 = { surface ->
+                    viewModel.onPreviewSurface16x9Created(surface)
+                },
+                onSurfaceCreated9x16 = { surface ->
+                    viewModel.onPreviewSurface9x16Created(surface)
                 }
             )
         }

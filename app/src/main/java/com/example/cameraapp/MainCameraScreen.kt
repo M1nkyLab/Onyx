@@ -22,38 +22,59 @@ import androidx.compose.ui.viewinterop.AndroidView
 @Composable
 fun MainCameraScreen(
     onRecordToggle: (Boolean) -> Unit,
-    onSurfaceCreated: (android.view.Surface) -> Unit
+    onSurfaceCreated16x9: (android.view.Surface) -> Unit,
+    onSurfaceCreated9x16: (android.view.Surface) -> Unit
 ) {
     var isRecording by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // AndroidView for the Window Surface (Preview)
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                TextureView(context).apply {
-                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                        override fun onSurfaceTextureAvailable(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
-                            onSurfaceCreated(android.view.Surface(surface))
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top Half: 16:9 Landscape Preview
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth().background(Color.DarkGray),
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    modifier = Modifier.aspectRatio(16f / 9f),
+                    factory = { context ->
+                        TextureView(context).apply {
+                            surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                                override fun onSurfaceTextureAvailable(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                                    onSurfaceCreated16x9(android.view.Surface(surface))
+                                }
+                                override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+                                override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture) = true
+                                override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {}
+                            }
                         }
-                        override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {}
-                        override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
-                            return true
-                        }
-                        override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {}
                     }
-                }
+                )
+                Text("16:9 Landscape", color = Color.White, modifier = Modifier.align(Alignment.TopStart).padding(8.dp))
             }
-        )
 
-        // Rule-of-Thirds Grid Indicator
-        RuleOfThirdsGrid()
-
-        // 9:16 Aspect Ratio Boundary Overlay (Portrait)
-        NineSixteenBoundary()
-
-        // 16:9 Aspect Ratio Boundary Overlay (Landscape)
-        SixteenNineBoundary()
+            // Bottom Half: 9:16 Portrait Preview
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    modifier = Modifier.aspectRatio(9f / 16f),
+                    factory = { context ->
+                        TextureView(context).apply {
+                            surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                                override fun onSurfaceTextureAvailable(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                                    onSurfaceCreated9x16(android.view.Surface(surface))
+                                }
+                                override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+                                override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture) = true
+                                override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {}
+                            }
+                        }
+                    }
+                )
+                Text("9:16 Portrait", color = Color.White, modifier = Modifier.align(Alignment.TopStart).padding(8.dp))
+            }
+        }
 
         // Recording Controls (Material 3)
         Box(
@@ -91,80 +112,5 @@ fun MainCameraScreen(
     }
 }
 
-@Composable
-fun RuleOfThirdsGrid() {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val width = size.width
-        val height = size.height
-
-        val strokeWidth = 1.dp.toPx()
-        val color = Color.White.copy(alpha = 0.3f)
-
-        // Vertical lines
-        drawLine(color, Offset(width / 3, 0f), Offset(width / 3, height), strokeWidth)
-        drawLine(color, Offset(width * 2 / 3, 0f), Offset(width * 2 / 3, height), strokeWidth)
-
-        // Horizontal lines
-        drawLine(color, Offset(0f, height / 3), Offset(width, height / 3), strokeWidth)
-        drawLine(color, Offset(0f, height * 2 / 3), Offset(width, height * 2 / 3), strokeWidth)
-    }
-}
-
-@Composable
-fun NineSixteenBoundary() {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val width = size.width
-        val height = size.height
-
-        // Calculate 9:16 bounds inside current screen
-        val targetRatio = 9f / 16f
-        val currentRatio = width / height
-        
-        val boundaryWidth = if (currentRatio > targetRatio) height * targetRatio else width
-        val boundaryHeight = if (currentRatio > targetRatio) height else width / targetRatio
-        
-        val startX = (width - boundaryWidth) / 2
-        val startY = (height - boundaryHeight) / 2
-        
-        val color = Color.Yellow.copy(alpha = 0.5f)
-        val strokeWidth = 2.dp.toPx()
-
-        // Draw boundary rectangle
-        drawRect(
-            color = color,
-            topLeft = Offset(startX, startY),
-            size = androidx.compose.ui.geometry.Size(boundaryWidth, boundaryHeight),
-            style = Stroke(width = strokeWidth)
-        )
-    }
-}
-
-@Composable
-fun SixteenNineBoundary() {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val width = size.width
-        val height = size.height
-
-        // Calculate 16:9 bounds inside current screen
-        val targetRatio = 16f / 9f
-        val currentRatio = width / height
-        
-        val boundaryWidth = if (currentRatio > targetRatio) height * targetRatio else width
-        val boundaryHeight = if (currentRatio > targetRatio) height else width / targetRatio
-        
-        val startX = (width - boundaryWidth) / 2
-        val startY = (height - boundaryHeight) / 2
-        
-        // Use a different color (e.g., Cyan) for landscape to distinguish from the yellow portrait boundary
-        val color = Color.Cyan.copy(alpha = 0.5f)
-        val strokeWidth = 2.dp.toPx()
-
-        // Draw boundary rectangle
-        drawRect(
-            color = color,
-            topLeft = Offset(startX, startY),
-            size = androidx.compose.ui.geometry.Size(boundaryWidth, boundaryHeight),
-            style = Stroke(width = strokeWidth)
-        )
     }
 }

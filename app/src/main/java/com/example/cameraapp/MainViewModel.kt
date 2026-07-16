@@ -16,9 +16,12 @@ class MainViewModel @Inject constructor(
 
     private var cameraResolution: Size? = null
 
-    fun onPreviewSurfaceCreated(surface: Surface) {
-        // Feed the Compose AndroidView window surface to the hardware renderer
-        renderer.setPreviewSurface(surface)
+    fun onPreviewSurface16x9Created(surface: Surface) {
+        renderer.setPreviewSurface16x9(surface)
+    }
+
+    fun onPreviewSurface9x16Created(surface: Surface) {
+        renderer.setPreviewSurface9x16(surface)
     }
 
     fun onResolutionResolved(size: Size) {

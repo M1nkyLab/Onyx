@@ -38,8 +38,10 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
     private var eglConfig: EGLConfig? = null
 
     // EGL Surfaces
-    private var windowSurface: EGLSurface = EGL14.EGL_NO_SURFACE
-    private var pendingPreviewSurface: Surface? = null
+    private var previewSurface16x9: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var pendingPreviewSurface16x9: Surface? = null
+    private var previewSurface9x16: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var pendingPreviewSurface9x16: Surface? = null
     private var encoder16x9Surface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var encoder9x16Surface: EGLSurface = EGL14.EGL_NO_SURFACE
 
@@ -107,19 +109,34 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         renderHandler = null
     }
 
-    // Call this from UI to set preview surface
-    fun setPreviewSurface(surface: Surface) {
-        pendingPreviewSurface = surface
-        renderHandler?.post { attachPreviewSurface() }
+    // Call this from UI to set preview surfaces
+    fun setPreviewSurface16x9(surface: Surface) {
+        pendingPreviewSurface16x9 = surface
+        renderHandler?.post { attachPreviewSurface16x9() }
     }
 
-    private fun attachPreviewSurface() {
-        pendingPreviewSurface?.let { surface ->
-            if (windowSurface != EGL14.EGL_NO_SURFACE) {
-                EGL14.eglDestroySurface(eglDisplay, windowSurface)
+    fun setPreviewSurface9x16(surface: Surface) {
+        pendingPreviewSurface9x16 = surface
+        renderHandler?.post { attachPreviewSurface9x16() }
+    }
+
+    private fun attachPreviewSurface16x9() {
+        pendingPreviewSurface16x9?.let { surface ->
+            if (previewSurface16x9 != EGL14.EGL_NO_SURFACE) {
+                EGL14.eglDestroySurface(eglDisplay, previewSurface16x9)
             }
             val surfaceAttribs = intArrayOf(EGL14.EGL_NONE)
-            windowSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, surface, surfaceAttribs, 0)
+            previewSurface16x9 = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, surface, surfaceAttribs, 0)
+        }
+    }
+
+    private fun attachPreviewSurface9x16() {
+        pendingPreviewSurface9x16?.let { surface ->
+            if (previewSurface9x16 != EGL14.EGL_NO_SURFACE) {
+                EGL14.eglDestroySurface(eglDisplay, previewSurface9x16)
+            }
+            val surfaceAttribs = intArrayOf(EGL14.EGL_NONE)
+            previewSurface9x16 = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, surface, surfaceAttribs, 0)
         }
     }
 
@@ -186,7 +203,8 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         }
         
         onSurfaceTextureCreated?.invoke(cameraSurfaceTexture!!)
-        pendingPreviewSurface?.let { attachPreviewSurface() }
+        pendingPreviewSurface16x9?.let { attachPreviewSurface16x9() }
+        pendingPreviewSurface9x16?.let { attachPreviewSurface9x16() }
     }
 
     override fun onFrameAvailable(surfaceTexture: SurfaceTexture?) {
@@ -195,9 +213,14 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         
         val timestamp = cameraSurfaceTexture?.timestamp ?: 0L
 
-        // Render to Preview (Window)
-        if (windowSurface != EGL14.EGL_NO_SURFACE) {
-            renderToSurface(windowSurface, timestamp, isCropped = false)
+        // Render to 16:9 Preview
+        if (previewSurface16x9 != EGL14.EGL_NO_SURFACE) {
+            renderToSurface(previewSurface16x9, timestamp, isCropped = false)
+        }
+
+        // Render to 9:16 Preview (Cropped)
+        if (previewSurface9x16 != EGL14.EGL_NO_SURFACE) {
+            renderToSurface(previewSurface9x16, timestamp, isCropped = true)
         }
 
         // Render to 16:9 Encoder
@@ -299,7 +322,8 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
     private fun releaseEGL() {
         if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
             EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
-            if (windowSurface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, windowSurface)
+            if (previewSurface16x9 != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, previewSurface16x9)
+            if (previewSurface9x16 != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, previewSurface9x16)
             if (encoder16x9Surface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, encoder16x9Surface)
             if (encoder9x16Surface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, encoder9x16Surface)
             EGL14.eglDestroyContext(eglDisplay, eglContext)
@@ -308,7 +332,8 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         }
         eglDisplay = EGL14.EGL_NO_DISPLAY
         eglContext = EGL14.EGL_NO_CONTEXT
-        windowSurface = EGL14.EGL_NO_SURFACE
+        previewSurface16x9 = EGL14.EGL_NO_SURFACE
+        previewSurface9x16 = EGL14.EGL_NO_SURFACE
         encoder16x9Surface = EGL14.EGL_NO_SURFACE
         encoder9x16Surface = EGL14.EGL_NO_SURFACE
     }
