@@ -142,6 +142,10 @@ class MediaEncoderEngine @Inject constructor() {
 
     fun stopRecording() {
         isRecording = false
+
+        // 1. Give the background loop 200ms to finish draining final video/audio frames
+        Thread.sleep(200)
+
         audioRecord?.stop()
         audioRecord?.release()
         audioRecord = null
@@ -149,8 +153,6 @@ class MediaEncoderEngine @Inject constructor() {
         audioThread?.quitSafely()
         audioThread = null
         
-        // Drain remaining buffers and stop codecs
-        // (Simplified for brevity, production code requires proper EOS signaling and draining loop)
         videoCodec16x9?.stop()
         videoCodec16x9?.release()
         
@@ -160,13 +162,18 @@ class MediaEncoderEngine @Inject constructor() {
         audioCodec?.stop()
         audioCodec?.release()
 
-        if (muxer16x9Started) {
-            muxer16x9?.stop()
-            muxer16x9?.release()
-        }
-        if (muxer9x16Started) {
-            muxer9x16?.stop()
-            muxer9x16?.release()
+        // 2. Wrap Muxer stopping in try-catch to prevent crashes on short videos
+        try {
+            if (muxer16x9Started) {
+                muxer16x9?.stop()
+                muxer16x9?.release()
+            }
+            if (muxer9x16Started) {
+                muxer9x16?.stop()
+                muxer9x16?.release()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Muxer stop failed. Recording was likely too short.", e)
         }
         
         muxer16x9Started = false
