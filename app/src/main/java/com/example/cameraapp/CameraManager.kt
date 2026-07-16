@@ -42,9 +42,10 @@ class CameraManager @Inject constructor(
             .setResolutionSelector(resolutionSelector)
             .build()
             
-        // Provide our custom SurfaceProvider
         preview.setSurfaceProvider { request ->
             onResolutionResolved?.invoke(request.resolution)
+            
+            dualVideoRenderer.setCameraResolution(request.resolution.width, request.resolution.height)
             
             dualVideoRenderer.onSurfaceTextureCreated = { surfaceTexture ->
                 // CameraX requires the SurfaceTexture to have a default buffer size matching the request resolution

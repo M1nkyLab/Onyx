@@ -215,26 +215,32 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
 
         // Render to 16:9 Preview
         if (previewSurface16x9 != EGL14.EGL_NO_SURFACE) {
-            renderToSurface(previewSurface16x9, timestamp, isCropped = false)
+            renderToSurface(previewSurface16x9, timestamp)
         }
 
-        // Render to 9:16 Preview (Cropped)
+        // Render to 9:16 Preview
         if (previewSurface9x16 != EGL14.EGL_NO_SURFACE) {
-            renderToSurface(previewSurface9x16, timestamp, isCropped = true)
+            renderToSurface(previewSurface9x16, timestamp)
         }
 
         // Render to 16:9 Encoder
         if (encoder16x9Surface != EGL14.EGL_NO_SURFACE) {
-            renderToSurface(encoder16x9Surface, timestamp, isCropped = false)
+            renderToSurface(encoder16x9Surface, timestamp)
         }
 
-        // Render to 9:16 Encoder (Cropped)
+        // Render to 9:16 Encoder
         if (encoder9x16Surface != EGL14.EGL_NO_SURFACE) {
-            renderToSurface(encoder9x16Surface, timestamp, isCropped = true)
+            renderToSurface(encoder9x16Surface, timestamp)
         }
     }
 
-    private fun renderToSurface(surface: EGLSurface, timestamp: Long, isCropped: Boolean) {
+    private var cameraAspectRatio: Float = 9f / 16f
+    
+    fun setCameraResolution(width: Int, height: Int) {
+        cameraAspectRatio = width.toFloat() / height.toFloat()
+    }
+
+    private fun renderToSurface(surface: EGLSurface, timestamp: Long) {
         EGL14.eglMakeCurrent(eglDisplay, surface, surface, eglContext)
         
         // Query surface dimensions and set OpenGL viewport (Critical for fixing 1x1 dummy surface bug)
@@ -252,12 +258,21 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         val mvpMatrix = FloatArray(16)
         Matrix.setIdentityM(mvpMatrix, 0)
         
-        if (isCropped) {
-            // CORRECT MATH: Stretch the X axis to counteract the 9:16 surface squish.
-            // This pushes the left and right edges off-screen, creating a center crop.
-            val scaleX = (16f / 9f) / (9f / 16f) 
-            Matrix.scaleM(mvpMatrix, 0, scaleX, 1.0f, 1.0f)
+        val surfaceAspect = widthArray[0].toFloat() / heightArray[0].toFloat()
+        
+        // Dynamically compute exact center crop matrix based on real surface and camera dimensions
+        var scaleX = 1.0f
+        var scaleY = 1.0f
+        
+        if (surfaceAspect > cameraAspectRatio) {
+            // Surface is wider than camera feed (e.g. 16:9 surface, 9:16 camera) -> Stretch Y to crop top/bottom
+            scaleY = surfaceAspect / cameraAspectRatio
+        } else if (surfaceAspect < cameraAspectRatio) {
+            // Surface is taller than camera feed (e.g. 9:16 surface, 16:9 camera) -> Stretch X to crop left/right
+            scaleX = cameraAspectRatio / surfaceAspect
         }
+
+        Matrix.scaleM(mvpMatrix, 0, scaleX, scaleY, 1.0f)
 
         // Load uniforms & attributes
         val positionHandle = GLES20.glGetAttribLocation(programId, "aPosition")
