@@ -41,8 +41,17 @@ class MainViewModel @Inject constructor(
         val out9x16 = File(moviesDir, "DualCam_9x16_$timestamp.mp4").absolutePath
 
         // Use the highest available camera resolution, falling back to 1080p if unresolved.
-        val width = cameraResolution?.width ?: 1920
-        val height = cameraResolution?.height ?: 1080
+        var width = cameraResolution?.width ?: 1920
+        var height = cameraResolution?.height ?: 1080
+        
+        // Cap at 1080p for dual encoding to prevent hardware crash
+        val isLandscape = width >= height
+        val longSide = if (isLandscape) width else height
+        if (longSide > 1920) {
+            width = if (isLandscape) 1920 else 1080
+            height = if (isLandscape) 1080 else 1920
+        }
+        
         val fps = 30
 
         // 1. Prepare codecs and dual muxers

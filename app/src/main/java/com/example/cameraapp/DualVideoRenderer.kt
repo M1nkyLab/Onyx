@@ -39,6 +39,7 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
 
     // EGL Surfaces
     private var windowSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var pendingPreviewSurface: Surface? = null
     private var encoder16x9Surface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var encoder9x16Surface: EGLSurface = EGL14.EGL_NO_SURFACE
 
@@ -108,7 +109,12 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
 
     // Call this from UI to set preview surface
     fun setPreviewSurface(surface: Surface) {
-        renderHandler?.post {
+        pendingPreviewSurface = surface
+        renderHandler?.post { attachPreviewSurface() }
+    }
+
+    private fun attachPreviewSurface() {
+        pendingPreviewSurface?.let { surface ->
             if (windowSurface != EGL14.EGL_NO_SURFACE) {
                 EGL14.eglDestroySurface(eglDisplay, windowSurface)
             }
@@ -180,6 +186,7 @@ class DualVideoRenderer @Inject constructor() : SurfaceTexture.OnFrameAvailableL
         }
         
         onSurfaceTextureCreated?.invoke(cameraSurfaceTexture!!)
+        pendingPreviewSurface?.let { attachPreviewSurface() }
     }
 
     override fun onFrameAvailable(surfaceTexture: SurfaceTexture?) {

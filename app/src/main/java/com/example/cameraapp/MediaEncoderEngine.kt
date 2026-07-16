@@ -197,9 +197,9 @@ class MediaEncoderEngine @Inject constructor() {
             // 2. Drain encoded audio and write to both muxers
             drainAudio()
             
-            // 3. (In real implementation, also drain video codecs here or on another thread)
-            // drainVideo(videoCodec16x9, muxer16x9, true)
-            // drainVideo(videoCodec9x16, muxer9x16, false)
+            // 3. Drain video codecs to prevent freeze and save files
+            drainVideo(videoCodec16x9, muxer16x9, true)
+            drainVideo(videoCodec9x16, muxer9x16, false)
         }
     }
 
@@ -223,6 +223,40 @@ class MediaEncoderEngine @Inject constructor() {
             }
             audioCodec?.releaseOutputBuffer(outputBufferIndex, false)
             outputBufferIndex = audioCodec?.dequeueOutputBuffer(bufferInfo, 0) ?: -1
+        }
+    }
+
+    private fun drainVideo(codec: MediaCodec?, muxer: MediaMuxer?, is16x9: Boolean) {
+        if (codec == null || muxer == null) return
+        var outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
+        
+        if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+            val newFormat = codec.outputFormat
+            if (is16x9) {
+                videoTrackIndex16x9 = muxer.addTrack(newFormat)
+                muxer.start() 
+                muxer16x9Started = true
+            } else {
+                videoTrackIndex9x16 = muxer.addTrack(newFormat)
+                muxer.start()
+                muxer9x16Started = true
+            }
+        }
+        
+        while (outputBufferIndex >= 0) {
+            val encodedData = codec.getOutputBuffer(outputBufferIndex)
+            if (encodedData != null && bufferInfo.size > 0) {
+                encodedData.position(bufferInfo.offset)
+                encodedData.limit(bufferInfo.offset + bufferInfo.size)
+
+                if (is16x9 && muxer16x9Started && videoTrackIndex16x9 >= 0) {
+                    muxer.writeSampleData(videoTrackIndex16x9, encodedData, bufferInfo)
+                } else if (!is16x9 && muxer9x16Started && videoTrackIndex9x16 >= 0) {
+                    muxer.writeSampleData(videoTrackIndex9x16, encodedData, bufferInfo)
+                }
+            }
+            codec.releaseOutputBuffer(outputBufferIndex, false)
+            outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
         }
     }
 }
